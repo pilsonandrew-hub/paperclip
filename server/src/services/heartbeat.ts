@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { execFile as execFileCallback } from "node:child_process";
+import { execFile as execFileCallback, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, getTableColumns, gt, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
@@ -259,6 +259,69 @@ const SESSIONED_LOCAL_ADAPTERS = new Set([
   "pi_local",
 ]);
 const INLINE_BASE64_IMAGE_DATA_RE = /("type":"image","source":\{"type":"base64","data":")([A-Za-z0-9+/=]{1024,})(")/g;
+const OPENCLAW_EVENT_TEXT_MAX_CHARS = 500;
+const OPENCLAW_COMPLETION_HOOK_SENT_KEY = "openclawCompletionHookSent";
+const OPENCLAW_BIN = process.env.OPENCLAW_BIN || "/usr/local/bin/openclaw";
+function truncateOpenClawEventText(value: string | null | undefined): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  return trimmed.length > OPENCLAW_EVENT_TEXT_MAX_CHARS
+    ? trimmed.slice(0, OPENCLAW_EVENT_TEXT_MAX_CHARS)
+    : trimmed;
+}
+function readOpenClawCompletionHookState(resultJson: Record<string, unknown> | null | undefined): boolean {
+  if (!resultJson || typeof resultJson !== "object" || Array.isArray(resultJson)) return false;
+  return resultJson[OPENCLAW_COMPLETION_HOOK_SENT_KEY] === true;
+}
+function mergeOpenClawCompletionHookState(
+  resultJson: Record<string, unknown> | null | undefined,
+  sent: boolean,
+): Record<string, unknown> {
+  const base = resultJson && typeof resultJson === "object" && !Array.isArray(resultJson)
+    ? resultJson
+    : {};
+  return {
+    ...base,
+    [OPENCLAW_COMPLETION_HOOK_SENT_KEY]: sent,
+  };
+}
+function buildOpenClawCompletionEventText(input: {
+  status: string;
+  agentName: string;
+  issueTitle: string | null;
+  summary: string | null;
+  error: string | null;
+}): string {
+  const issuePart = input.issueTitle ? ` on ${input.issueTitle}` : "";
+  if (input.status === "succeeded") {
+    const summary = truncateOpenClawEventText(input.summary || `${input.agentName} finished${issuePart}`);
+    return truncateOpenClawEventText(`Paperclip done: ${summary}`);
+  }
+  const failure = truncateOpenClawEventText(input.error || `Run ${input.status}`);
+  return truncateOpenClawEventText(`Paperclip failed: ${input.agentName}${issuePart} — ${failure}`);
+}
+async function dispatchOpenClawCompletionEvent(input: {
+  status: string;
+  agentName: string;
+  issueTitle: string | null;
+  summary: string | null;
+  error: string | null;
+}): Promise<void> {
+  const eventText = buildOpenClawCompletionEventText(input);
+  if (!eventText) return;
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      OPENCLAW_BIN,
+      ["system", "event", "--text", eventText, "--mode", "now"],
+      { stdio: "ignore", detached: false },
+    );
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`openclaw system event exited with code ${code ?? -1}`));
+    });
+  });
+}
 
 type RuntimeConfigSecretResolver = Pick<
   ReturnType<typeof secretService>,
@@ -5922,7 +5985,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             } as Record<string, unknown>)
           : null;
 
-      const persistedResultJson = mergeHeartbeatRunResultJson(
+      let persistedResultJson = mergeHeartbeatRunResultJson(
         mergeRunStopMetadataForAgent(agent, outcome, {
           resultJson: mergeModelProfileRunMetadata(
             mergeAdapterRecoveryMetadata({
@@ -5937,6 +6000,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         }),
         adapterResult.summary ?? null,
       );
+      const completionHookAlreadySent = readOpenClawCompletionHookState(persistedResultJson);
 
       let persistedRun = await setRunStatus(run.id, status, {
         finishedAt: new Date(),
@@ -5998,6 +6062,35 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         await finalizeIssueCommentPolicy(livenessRun, agent);
         await releaseIssueExecutionAndPromote(livenessRun);
         await handleRunLivenessContinuation(livenessRun);
+      }
+      if (finalizedRun && !completionHookAlreadySent) {
+        try {
+          const issueTitle = issueRef?.title ?? null;
+          await dispatchOpenClawCompletionEvent({
+            status,
+            agentName: agent.name,
+            issueTitle,
+            summary: readNonEmptyString(adapterResult.summary) ?? readNonEmptyString(persistedResultJson?.summary) ?? null,
+            error: outcome === "succeeded" ? null : (readNonEmptyString(adapterResult.errorMessage) ?? readNonEmptyString(finalizedRun.error) ?? null),
+          });
+          persistedResultJson = mergeOpenClawCompletionHookState(persistedResultJson, true);
+          await db
+            .update(heartbeatRuns)
+            .set({
+              resultJson: persistedResultJson,
+              updatedAt: new Date(),
+            })
+            .where(eq(heartbeatRuns.id, finalizedRun.id));
+        } catch (hookErr) {
+          logger.warn(
+            {
+              err: hookErr instanceof Error ? { message: hookErr.message, stack: hookErr.stack } : String(hookErr),
+              runId: finalizedRun.id,
+              openclawBin: OPENCLAW_BIN,
+            },
+            "failed to dispatch OpenClaw completion hook",
+          );
+        }
       }
 
       if (finalizedRun) {
