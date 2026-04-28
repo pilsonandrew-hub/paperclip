@@ -151,9 +151,10 @@ describeEmbeddedPostgres("heartbeat OpenClaw completion hook", () => {
     }, { timeout: 5_000 });
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [bin, args] = spawnMock.mock.calls[0] ?? [];
-    expect(bin).toBe("/usr/local/bin/openclaw");
+    const [bin, args, options] = spawnMock.mock.calls[0] ?? [];
+    expect(bin).toBe(process.execPath);
     expect(args).toEqual([
+      "/usr/local/lib/node_modules/openclaw/openclaw.mjs",
       "system",
       "event",
       "--text",
@@ -161,6 +162,13 @@ describeEmbeddedPostgres("heartbeat OpenClaw completion hook", () => {
       "--mode",
       "now",
     ]);
+    expect(options).toMatchObject({
+      stdio: "ignore",
+      detached: false,
+      env: expect.objectContaining({
+        NODE: process.execPath,
+      }),
+    });
   });
 
   it("does not fail the heartbeat run when OpenClaw completion dispatch fails", async () => {

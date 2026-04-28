@@ -262,8 +262,35 @@ const INLINE_BASE64_IMAGE_DATA_RE = /("type":"image","source":\{"type":"base64",
 const OPENCLAW_EVENT_TEXT_MAX_CHARS = 500;
 const OPENCLAW_COMPLETION_HOOK_SENT_KEY = "openclawCompletionHookSent";
 const OPENCLAW_COMPLETION_HOOK_TIMEOUT_MS = 5_000;
+const OPENCLAW_COMPLETION_HOOK_DEFAULT_PATH = [
+  "/usr/local/bin",
+  "/usr/bin",
+  "/bin",
+  "/usr/sbin",
+  "/sbin",
+].join(":");
+const OPENCLAW_NODE_BIN = process.env.OPENCLAW_NODE_BIN || process.execPath || "/usr/local/bin/node";
+const OPENCLAW_ENTRYPOINT = process.env.OPENCLAW_ENTRYPOINT || "/usr/local/lib/node_modules/openclaw/openclaw.mjs";
 function readOpenClawBin(): string {
   return process.env.OPENCLAW_BIN || "/usr/local/bin/openclaw";
+}
+function buildOpenClawCompletionHookEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  env.PATH = env.PATH && env.PATH.trim().length > 0 ? env.PATH : OPENCLAW_COMPLETION_HOOK_DEFAULT_PATH;
+  env.NODE = env.NODE || OPENCLAW_NODE_BIN;
+  return env;
+}
+function buildOpenClawCompletionCommand(): { command: string; args: string[] } {
+  if (OPENCLAW_ENTRYPOINT) {
+    return {
+      command: OPENCLAW_NODE_BIN,
+      args: [OPENCLAW_ENTRYPOINT],
+    };
+  }
+  return {
+    command: readOpenClawBin(),
+    args: [],
+  };
 }
 function truncateOpenClawEventText(value: string | null | undefined): string {
   if (typeof value !== "string") return "";
@@ -312,12 +339,12 @@ async function dispatchOpenClawCompletionEvent(input: {
 }): Promise<void> {
   const eventText = buildOpenClawCompletionEventText(input);
   if (!eventText) return;
-  const openclawBin = readOpenClawBin();
+  const openclaw = buildOpenClawCompletionCommand();
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      openclawBin,
-      ["system", "event", "--text", eventText, "--mode", "now"],
-      { stdio: "ignore", detached: false },
+      openclaw.command,
+      [...openclaw.args, "system", "event", "--text", eventText, "--mode", "now"],
+      { stdio: "ignore", detached: false, env: buildOpenClawCompletionHookEnv() },
     );
     let settled = false;
     const finish = (fn: () => void) => {
