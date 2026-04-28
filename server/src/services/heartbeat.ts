@@ -251,6 +251,7 @@ const SESSIONED_LOCAL_ADAPTERS = new Set([
 const INLINE_BASE64_IMAGE_DATA_RE = /("type":"image","source":\{"type":"base64","data":")([A-Za-z0-9+/=]{1024,})(")/g;
 const OPENCLAW_EVENT_TEXT_MAX_CHARS = 500;
 const OPENCLAW_COMPLETION_HOOK_SENT_KEY = "openclawCompletionHookSent";
+const OPENCLAW_COMPLETION_HOOK_TIMEOUT_MS = 5_000;
 function readOpenClawBin(): string {
   return process.env.OPENCLAW_BIN || "/usr/local/bin/openclaw";
 }
@@ -308,10 +309,25 @@ async function dispatchOpenClawCompletionEvent(input: {
       ["system", "event", "--text", eventText, "--mode", "now"],
       { stdio: "ignore", detached: false },
     );
-    child.once("error", reject);
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      fn();
+    };
+    const timeout = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {
+        // ignore kill errors; timeout rejection is the important path
+      }
+      finish(() => reject(new Error(`openclaw system event timed out after ${OPENCLAW_COMPLETION_HOOK_TIMEOUT_MS}ms`)));
+    }, OPENCLAW_COMPLETION_HOOK_TIMEOUT_MS);
+    child.once("error", (err) => finish(() => reject(err)));
     child.once("exit", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`openclaw system event exited with code ${code ?? -1}`));
+      if (code === 0) finish(resolve);
+      else finish(() => reject(new Error(`openclaw system event exited with code ${code ?? -1}`)));
     });
   });
 }

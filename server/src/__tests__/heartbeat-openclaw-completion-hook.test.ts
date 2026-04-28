@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import type { ChildProcess } from "node:child_process";
 import { agents, companies, createDb, heartbeatRuns } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
 import {
@@ -89,6 +90,19 @@ describeEmbeddedPostgres("heartbeat OpenClaw completion hook", () => {
     });
   }
 
+  function mockSpawnHang() {
+    const kill = vi.fn();
+    spawnMock.mockImplementation(() => {
+      const child = new EventEmitter() as EventEmitter & ChildProcess & {
+        once: (event: string, listener: (...args: any[]) => void) => any;
+        kill: typeof kill;
+      };
+      child.kill = kill;
+      return child;
+    });
+    return { kill };
+  }
+
   let fixtureCounter = 0;
 
   async function createAgentFixture() {
@@ -171,4 +185,27 @@ describeEmbeddedPostgres("heartbeat OpenClaw completion hook", () => {
     expect((persisted?.resultJson as Record<string, unknown> | null)?.openclawCompletionHookSent).not.toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
   });
+
+  it("times out a hung OpenClaw completion dispatch without blocking heartbeat finalization", async () => {
+    const { kill } = mockSpawnHang();
+    const { agentId } = await createAgentFixture();
+    const heartbeat = heartbeatService(db);
+
+    const run = await heartbeat.wakeup(agentId, {
+      source: "on_demand",
+      triggerDetail: "manual",
+    });
+
+    expect(run).not.toBeNull();
+    await vi.waitFor(async () => {
+      const latest = await heartbeat.getRun(run!.id);
+      expect(latest?.status).toBe("succeeded");
+      expect(spawnMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+      expect(kill).toHaveBeenCalledTimes(1);
+    }, { timeout: 10_000 });
+
+    const persisted = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)).then((rows) => rows[0] ?? null);
+    expect(persisted?.status).toBe("succeeded");
+    expect((persisted?.resultJson as Record<string, unknown> | null)?.openclawCompletionHookSent).not.toBe(true);
+  }, 15_000);
 });
