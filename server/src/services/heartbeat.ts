@@ -251,7 +251,9 @@ const SESSIONED_LOCAL_ADAPTERS = new Set([
 const INLINE_BASE64_IMAGE_DATA_RE = /("type":"image","source":\{"type":"base64","data":")([A-Za-z0-9+/=]{1024,})(")/g;
 const OPENCLAW_EVENT_TEXT_MAX_CHARS = 500;
 const OPENCLAW_COMPLETION_HOOK_SENT_KEY = "openclawCompletionHookSent";
-const OPENCLAW_BIN = process.env.OPENCLAW_BIN || "/usr/local/bin/openclaw";
+function readOpenClawBin(): string {
+  return process.env.OPENCLAW_BIN || "/usr/local/bin/openclaw";
+}
 function truncateOpenClawEventText(value: string | null | undefined): string {
   if (typeof value !== "string") return "";
   const trimmed = value.replace(/\s+/g, " ").trim();
@@ -284,10 +286,10 @@ function buildOpenClawCompletionEventText(input: {
 }): string {
   const issuePart = input.issueTitle ? ` on ${input.issueTitle}` : "";
   if (input.status === "succeeded") {
-    const summary = truncateOpenClawEventText(input.summary || `${input.agentName} finished${issuePart}`);
+    const summary = input.summary?.replace(/\s+/g, " ").trim() || `${input.agentName} finished${issuePart}`;
     return truncateOpenClawEventText(`Paperclip done: ${summary}`);
   }
-  const failure = truncateOpenClawEventText(input.error || `Run ${input.status}`);
+  const failure = input.error?.replace(/\s+/g, " ").trim() || `Run ${input.status}`;
   return truncateOpenClawEventText(`Paperclip failed: ${input.agentName}${issuePart} — ${failure}`);
 }
 async function dispatchOpenClawCompletionEvent(input: {
@@ -299,9 +301,10 @@ async function dispatchOpenClawCompletionEvent(input: {
 }): Promise<void> {
   const eventText = buildOpenClawCompletionEventText(input);
   if (!eventText) return;
+  const openclawBin = readOpenClawBin();
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      OPENCLAW_BIN,
+      openclawBin,
       ["system", "event", "--text", eventText, "--mode", "now"],
       { stdio: "ignore", detached: false },
     );
@@ -5803,7 +5806,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             {
               err: hookErr instanceof Error ? { message: hookErr.message, stack: hookErr.stack } : String(hookErr),
               runId: finalizedRun.id,
-              openclawBin: OPENCLAW_BIN,
+              openclawBin: readOpenClawBin(),
             },
             "failed to dispatch OpenClaw completion hook",
           );
