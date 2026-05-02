@@ -15,6 +15,18 @@ vi.mock("../services/board-auth.js", () => ({
 import { verifyLocalAgentJwt } from "../agent-auth-jwt.js";
 import { actorMiddleware } from "../middleware/auth.js";
 
+type TestActor = {
+  type: string;
+  source: string;
+  userId?: string;
+  userName?: string;
+  userEmail?: string | null;
+  isInstanceAdmin?: boolean;
+  agentId?: string;
+  companyId?: string;
+  runId?: string;
+};
+
 function createSelectChain(rows: unknown[]) {
   return {
     from() {
@@ -63,11 +75,11 @@ async function createApp(selectRows: unknown[][] = [[], []]) {
   }
 
   function runActor(headers: Record<string, string | undefined> = {}) {
-    return new Promise<Record<string, unknown>>((resolve, reject) => {
+    return new Promise<TestActor>((resolve, reject) => {
       const req = createRequest(headers);
       middleware(req, {} as never, () => {
         try {
-          resolve(req.actor as Record<string, unknown>);
+          resolve(req.actor as TestActor);
         } catch (error) {
           reject(error);
         }
@@ -76,7 +88,10 @@ async function createApp(selectRows: unknown[][] = [[], []]) {
   }
 
   function runAgentOnly(headers: Record<string, string | undefined> = {}) {
-    return new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
+    return new Promise<{
+      status: number;
+      body: { error: string } | { agentId: string; companyId: string };
+    }>((resolve, reject) => {
       const req = createRequest(headers);
       const res = {
         statusCode: 200,
@@ -84,7 +99,7 @@ async function createApp(selectRows: unknown[][] = [[], []]) {
           this.statusCode = code;
           return this;
         },
-        json(body: Record<string, unknown>) {
+        json(body: { error: string } | { agentId: string; companyId: string }) {
           resolve({ status: this.statusCode, body });
           return this;
         },
