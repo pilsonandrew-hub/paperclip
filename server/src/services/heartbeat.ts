@@ -259,22 +259,27 @@ const OPENCLAW_COMPLETION_HOOK_DEFAULT_PATH = [
   "/usr/sbin",
   "/sbin",
 ].join(":");
-const OPENCLAW_NODE_BIN = process.env.OPENCLAW_NODE_BIN || process.execPath || "/usr/local/bin/node";
-const OPENCLAW_ENTRYPOINT = process.env.OPENCLAW_ENTRYPOINT || "/usr/local/lib/node_modules/openclaw/openclaw.mjs";
+function readOpenClawNodeBin(): string {
+  return process.env.OPENCLAW_NODE_BIN || process.execPath || "/usr/local/bin/node";
+}
+function readOpenClawEntrypoint(): string {
+  return process.env.OPENCLAW_ENTRYPOINT || "/usr/local/lib/node_modules/openclaw/openclaw.mjs";
+}
 function readOpenClawBin(): string {
   return process.env.OPENCLAW_BIN || "/usr/local/bin/openclaw";
 }
 function buildOpenClawCompletionHookEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.PATH = env.PATH && env.PATH.trim().length > 0 ? env.PATH : OPENCLAW_COMPLETION_HOOK_DEFAULT_PATH;
-  env.NODE = env.NODE || OPENCLAW_NODE_BIN;
+  env.NODE = env.NODE || readOpenClawNodeBin();
   return env;
 }
 function buildOpenClawCompletionCommand(): { command: string; args: string[] } {
-  if (OPENCLAW_ENTRYPOINT) {
+  const entrypoint = readOpenClawEntrypoint();
+  if (entrypoint) {
     return {
-      command: OPENCLAW_NODE_BIN,
-      args: [OPENCLAW_ENTRYPOINT],
+      command: readOpenClawNodeBin(),
+      args: [entrypoint],
     };
   }
   return {
