@@ -58,6 +58,9 @@ export {
   FINANCE_EVENT_KINDS,
   FINANCE_DIRECTIONS,
   FINANCE_UNITS,
+  DEAL_EVENT_KINDS,
+  DEAL_SETTLEMENT_STATUSES,
+  DEAL_ATTRIBUTION_CONFIDENCES,
   BUDGET_SCOPE_TYPES,
   BUDGET_METRICS,
   BUDGET_WINDOW_KINDS,
@@ -157,6 +160,9 @@ export {
   type FinanceEventKind,
   type FinanceDirection,
   type FinanceUnit,
+  type DealEventKind,
+  type DealSettlementStatus,
+  type DealAttributionConfidence,
   type BudgetScopeType,
   type BudgetMetric,
   type BudgetWindowKind,
@@ -869,6 +875,19 @@ export {
   type SetPluginState,
   type ListPluginState,
 } from "./validators/index.js";
+
+export {
+  dealSettlementLegSchema,
+  createDealSettlementSchema,
+  updateDealSettlementDraftSchema,
+  reverseDealSettlementSchema,
+  type DealSettlementLegInput,
+  type CreateDealSettlement,
+  type UpdateDealSettlementDraft,
+  type ReverseDealSettlement,
+} from "./validators/index.js";
+
+export type { DealSettlement, DealSettlementLeg } from "./types/index.js";
 
 export { API_PREFIX, API } from "./api.js";
 export { normalizeAgentUrlKey, deriveAgentUrlKey, isUuidLike } from "./agent-url-key.js";

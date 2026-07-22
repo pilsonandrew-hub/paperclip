@@ -147,6 +147,15 @@ export function financeEventKindDisplayName(eventKind: FinanceEventKind): string
     custom_model_import_charge: "Custom model import",
     custom_model_storage_charge: "Custom model storage",
     manual_adjustment: "Manual adjustment",
+    deal_acquisition: "Deal acquisition",
+    deal_auction_fee: "Deal auction fee",
+    deal_transport: "Deal transport",
+    deal_title_reg: "Deal title & registration",
+    deal_recon: "Deal recon",
+    deal_holding: "Deal holding",
+    deal_sale_expense: "Deal sale expense",
+    deal_sale_proceeds: "Deal sale proceeds",
+    deal_adjustment: "Deal adjustment",
   };
   return map[eventKind];
 }

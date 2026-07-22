@@ -325,6 +325,19 @@ export const BILLING_TYPES = [
 ] as const;
 export type BillingType = (typeof BILLING_TYPES)[number];
 
+export const DEAL_EVENT_KINDS = [
+  "deal_acquisition",
+  "deal_auction_fee",
+  "deal_transport",
+  "deal_title_reg",
+  "deal_recon",
+  "deal_holding",
+  "deal_sale_expense",
+  "deal_sale_proceeds",
+  "deal_adjustment",
+] as const;
+export type DealEventKind = (typeof DEAL_EVENT_KINDS)[number];
+
 export const FINANCE_EVENT_KINDS = [
   "inference_charge",
   "platform_fee",
@@ -340,8 +353,15 @@ export const FINANCE_EVENT_KINDS = [
   "custom_model_import_charge",
   "custom_model_storage_charge",
   "manual_adjustment",
+  ...DEAL_EVENT_KINDS,
 ] as const;
 export type FinanceEventKind = (typeof FINANCE_EVENT_KINDS)[number];
+
+export const DEAL_SETTLEMENT_STATUSES = ["draft", "committed", "reversed"] as const;
+export type DealSettlementStatus = (typeof DEAL_SETTLEMENT_STATUSES)[number];
+
+export const DEAL_ATTRIBUTION_CONFIDENCES = ["exact", "strong", "inferred"] as const;
+export type DealAttributionConfidence = (typeof DEAL_ATTRIBUTION_CONFIDENCES)[number];
 
 export const FINANCE_DIRECTIONS = ["debit", "credit"] as const;
 export type FinanceDirection = (typeof FINANCE_DIRECTIONS)[number];

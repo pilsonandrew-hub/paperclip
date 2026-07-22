@@ -298,6 +298,17 @@ export {
 } from "./finance.js";
 
 export {
+  dealSettlementLegSchema,
+  createDealSettlementSchema,
+  updateDealSettlementDraftSchema,
+  reverseDealSettlementSchema,
+  type DealSettlementLegInput,
+  type CreateDealSettlement,
+  type UpdateDealSettlementDraft,
+  type ReverseDealSettlement,
+} from "./deal-settlements.js";
+
+export {
   createAssetImageMetadataSchema,
   type CreateAssetImageMetadata,
 } from "./asset.js";

@@ -227,6 +227,7 @@ export type {
 } from "./routine.js";
 export type { CostEvent, CostSummary, CostByAgent, CostByProviderModel, CostByBiller, CostByAgentModel, CostWindowSpendRow, CostByProject } from "./cost.js";
 export type { FinanceEvent, FinanceSummary, FinanceByBiller, FinanceByKind } from "./finance.js";
+export type { DealSettlement, DealSettlementLeg } from "./deal-settlements.js";
 export type {
   AgentWakeupResponse,
   AgentWakeupSkipped,

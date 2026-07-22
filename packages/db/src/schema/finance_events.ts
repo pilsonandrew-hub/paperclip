@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, index, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, index, boolean, jsonb, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { issues } from "./issues.js";
@@ -6,6 +6,7 @@ import { projects } from "./projects.js";
 import { goals } from "./goals.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
 import { costEvents } from "./cost_events.js";
+import { dealSettlements } from "./deal_settlements.js";
 
 export const financeEvents = pgTable(
   "finance_events",
@@ -18,6 +19,8 @@ export const financeEvents = pgTable(
     goalId: uuid("goal_id").references(() => goals.id),
     heartbeatRunId: uuid("heartbeat_run_id").references(() => heartbeatRuns.id),
     costEventId: uuid("cost_event_id").references(() => costEvents.id),
+    dealSettlementId: uuid("deal_settlement_id").references(() => dealSettlements.id),
+    reversesFinanceEventId: uuid("reverses_finance_event_id").references((): AnyPgColumn => financeEvents.id),
     billingCode: text("billing_code"),
     description: text("description"),
     eventKind: text("event_kind").notNull(),
@@ -62,6 +65,10 @@ export const financeEvents = pgTable(
     companyCostEventIdx: index("finance_events_company_cost_event_idx").on(
       table.companyId,
       table.costEventId,
+    ),
+    companyDealSettlementIdx: index("finance_events_company_deal_settlement_idx").on(
+      table.companyId,
+      table.dealSettlementId,
     ),
   }),
 );

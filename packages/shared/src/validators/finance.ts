@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { AGENT_ADAPTER_TYPES, FINANCE_DIRECTIONS, FINANCE_EVENT_KINDS, FINANCE_UNITS } from "../constants.js";
+import {
+  AGENT_ADAPTER_TYPES,
+  DEAL_EVENT_KINDS,
+  FINANCE_DIRECTIONS,
+  FINANCE_EVENT_KINDS,
+  FINANCE_UNITS,
+} from "../constants.js";
+
+const dealEventKinds: readonly string[] = DEAL_EVENT_KINDS;
 
 export const createFinanceEventSchema = z.object({
   agentId: z.string().uuid().optional().nullable(),
@@ -26,6 +34,9 @@ export const createFinanceEventSchema = z.object({
   externalInvoiceId: z.string().optional().nullable(),
   metadataJson: z.record(z.string(), z.unknown()).optional().nullable(),
   occurredAt: z.string().datetime(),
+}).refine((value) => !dealEventKinds.includes(value.eventKind), {
+  message: "Deal ledger legs must be created through a deal settlement, not directly",
+  path: ["eventKind"],
 }).transform((value) => ({
   ...value,
   currency: value.currency.toUpperCase(),
