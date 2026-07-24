@@ -1342,6 +1342,17 @@ export function agentRoutes(
     res.json(revisions.map((revision) => redactConfigRevision(revision)));
   });
 
+  router.get("/agents/:id/config-revision-outcomes", async (req, res) => {
+    const id = req.params.id as string;
+    const agent = await svc.getById(id);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+    await assertCanReadConfigurations(req, agent.companyId);
+    res.json(await svc.listConfigRevisionOutcomes(id));
+  });
+
   router.get("/agents/:id/config-revisions/:revisionId", async (req, res) => {
     const id = req.params.id as string;
     const revisionId = req.params.revisionId as string;

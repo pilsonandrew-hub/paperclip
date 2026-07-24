@@ -1,0 +1,3 @@
+ALTER TABLE "heartbeat_runs" ADD COLUMN "agent_config_revision_id" uuid;--> statement-breakpoint
+ALTER TABLE "heartbeat_runs" ADD CONSTRAINT "heartbeat_runs_agent_config_revision_id_agent_config_revisions_id_fk" FOREIGN KEY ("agent_config_revision_id") REFERENCES "public"."agent_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "heartbeat_runs_company_agent_config_revision_idx" ON "heartbeat_runs" USING btree ("company_id","agent_config_revision_id");

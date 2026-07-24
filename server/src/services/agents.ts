@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, desc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -570,6 +570,29 @@ export function agentService(db: Db) {
         .from(agentConfigRevisions)
         .where(eq(agentConfigRevisions.agentId, id))
         .orderBy(desc(agentConfigRevisions.createdAt)),
+
+    /**
+     * Execution outcomes grouped by the config revision each run executed under.
+     * A null `agentConfigRevisionId` bucket is the agent's original config, from
+     * before its first recorded revision. Runs that never started are excluded —
+     * they produced no outcome to attribute.
+     */
+    listConfigRevisionOutcomes: async (id: string) =>
+      db
+        .select({
+          agentConfigRevisionId: heartbeatRuns.agentConfigRevisionId,
+          runCount: sql<number>`count(distinct ${heartbeatRuns.id})::int`,
+          succeededCount: sql<number>`(count(distinct ${heartbeatRuns.id}) filter (where ${heartbeatRuns.status} = 'succeeded'))::int`,
+          failedCount: sql<number>`(count(distinct ${heartbeatRuns.id}) filter (where ${heartbeatRuns.status} in ('failed', 'timed_out')))::int`,
+          costCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::double precision`,
+          firstRunAt: sql<Date | null>`min(${heartbeatRuns.startedAt})`,
+          lastRunAt: sql<Date | null>`max(${heartbeatRuns.startedAt})`,
+        })
+        .from(heartbeatRuns)
+        .leftJoin(costEvents, eq(costEvents.heartbeatRunId, heartbeatRuns.id))
+        .where(and(eq(heartbeatRuns.agentId, id), isNotNull(heartbeatRuns.startedAt)))
+        .groupBy(heartbeatRuns.agentConfigRevisionId)
+        .orderBy(sql`min(${heartbeatRuns.startedAt}) desc nulls last`),
 
     getConfigRevision: async (id: string, revisionId: string) =>
       db

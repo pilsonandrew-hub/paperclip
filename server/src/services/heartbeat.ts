@@ -17,6 +17,7 @@ import {
 } from "@paperclipai/shared";
 import {
   agents,
+  agentConfigRevisions,
   agentRuntimeState,
   agentTaskSessions,
   agentWakeupRequests,
@@ -3846,6 +3847,23 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     return Number(count ?? 0);
   }
 
+  /**
+   * The config revision that is live for an agent right now. Revisions are only
+   * recorded when config actually changes, so an agent that has never been
+   * edited resolves to null — meaning "original config", which is a valid
+   * attribution bucket rather than missing data.
+   */
+  async function resolveCurrentConfigRevisionId(agentId: string): Promise<string | null> {
+    const revision = await db
+      .select({ id: agentConfigRevisions.id })
+      .from(agentConfigRevisions)
+      .where(eq(agentConfigRevisions.agentId, agentId))
+      .orderBy(desc(agentConfigRevisions.createdAt))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+    return revision?.id ?? null;
+  }
+
   async function claimQueuedRun(run: typeof heartbeatRuns.$inferSelect) {
     if (run.status !== "queued") return run;
     const agent = await getAgent(run.agentId);
@@ -3922,11 +3940,16 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     }
 
     const claimedAt = new Date();
+    // Stamp the config revision the run actually executes under. Claim time is
+    // the correct point: config can change between queueing and execution, and
+    // the adapter is invoked with whatever is live now.
+    const agentConfigRevisionId = await resolveCurrentConfigRevisionId(run.agentId);
     const claimed = await db
       .update(heartbeatRuns)
       .set({
         status: "running",
         startedAt: run.startedAt ?? claimedAt,
+        agentConfigRevisionId,
         updatedAt: claimedAt,
       })
       .where(and(eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "queued")))

@@ -1,6 +1,7 @@
 import { type AnyPgColumn, pgTable, uuid, text, timestamp, jsonb, index, integer, bigint, boolean } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
+import { agentConfigRevisions } from "./agent_config_revisions.js";
 import { agentWakeupRequests } from "./agent_wakeup_requests.js";
 
 export const heartbeatRuns = pgTable(
@@ -9,6 +10,14 @@ export const heartbeatRuns = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     agentId: uuid("agent_id").notNull().references(() => agents.id),
+    /**
+     * The agent config revision that was live when this run was claimed for
+     * execution. Null means the run executed under the agent's original config,
+     * before any revision was recorded (revisions are only written on change).
+     */
+    agentConfigRevisionId: uuid("agent_config_revision_id").references(() => agentConfigRevisions.id, {
+      onDelete: "set null",
+    }),
     invocationSource: text("invocation_source").notNull().default("on_demand"),
     triggerDetail: text("trigger_detail"),
     status: text("status").notNull().default("queued"),
@@ -77,6 +86,10 @@ export const heartbeatRuns = pgTable(
       table.companyId,
       table.status,
       table.processStartedAt,
+    ),
+    companyAgentConfigRevisionIdx: index("heartbeat_runs_company_agent_config_revision_idx").on(
+      table.companyId,
+      table.agentConfigRevisionId,
     ),
   }),
 );
